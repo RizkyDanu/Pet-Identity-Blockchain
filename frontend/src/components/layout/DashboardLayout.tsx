@@ -1,0 +1,131 @@
+import { Link, Outlet, useLocation } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import type { UserRole } from '../../types';
+import { useEffect, useState } from 'react';
+import { medicalRecordApi } from '../../services/apiClient';
+
+type NavLink = { label: string; to: string; description?: string };
+type RoleCopy = { portalName: string; summary: string };
+
+// Navigasi sidebar berdasarkan role pengguna.
+const navConfig: Record<UserRole, NavLink[]> = {
+  OWNER: [
+    { label: 'Ringkasan Koleksi', to: '/owner/dashboard', description: 'Status kesehatan & identitas aktif' },
+    { label: 'Terbitkan Identitas', to: '/owner/pets/new', description: 'Buat sertifikat digital baru untuk hewan' },
+    { label: 'Riwayat Aktivitas', to: '/owner/notifications', description: 'Lacak update data vaksin & transfer kepemilikan' },
+    { label: 'Profil Pemilik Hewan', to: '/owner/account', description: 'Kelola informasi kontak & verifikasi' },
+  ],
+  CLINIC: [
+    { label: 'Manajemen Pasien', to: '/clinic/dashboard', description: 'Cari pasien & kelola rekam medis' },
+    { label: 'Verifikasi Vaksin', to: '/clinic/medical-records/pending', description: 'Validasi input vaksinasi ke sistem' },
+    { label: 'Koreksi Data', to: '/clinic/corrections', description: 'Tinjau permintaan perubahan dari pemilik hewan' },
+    // { label: 'Notifikasi', to: '/clinic/notifications', description: 'Update reguler' },
+    // { label: 'Simulasi Chain', to: '/clinic/blockchain-simulator', description: 'Uji proses tx klinik' },
+  ],
+  ADMIN: [
+    { label: 'Statistik Sistem', to: '/admin/dashboard', description: 'Pantau volume data & kesehatan sistem' },
+    { label: 'Otoritas Pengguna', to: '/admin/users', description: 'Manajemen izin akses klinik & pemilik hewan' },
+    { label: 'Direktori Global', to: '/admin/pets', description: 'Audit semua identitas hewan terdaftar' },
+    // { label: 'Simulasi Chain', to: '/admin/blockchain-simulator', description: 'Debug flow blockchain' },
+  ],
+  PUBLIC_VERIFIER: [],
+};
+
+const roleCopy: Record<UserRole, RoleCopy> = {
+  OWNER: {
+    portalName: 'Portal Pemilik Hewan',
+    summary: 'Fokus pada registrasi hewan, ajukan koreksi data, dan transfer kepemilikan.',
+  },
+  CLINIC: {
+    portalName: 'Portal Klinik Hewan',
+    summary: 'Fokus pada rekam medis, verifikasi vaksinasi, dan setujui koreksi data.',
+  },
+  ADMIN: {
+    portalName: 'Portal Admin',
+    summary: 'Fokus pada kelola sistem, peran, dan pemantauan data global.',
+  },
+  PUBLIC_VERIFIER: {
+    portalName: 'Portal Verifikator Publik',
+    summary: 'Fokus pada verifikasi data publik.',
+  },
+};
+
+// Layout utama untuk area dashboard (owner, clinic, admin).
+export const DashboardLayout = () => {
+  const { user, logout } = useAuth();
+  const location = useLocation();
+
+  const [isUserClinic, setIsUserClinic] = useState(false)
+
+  useEffect(() => {
+    medicalRecordApi.isUserClinic().then((isClinic) => {
+      setIsUserClinic(isClinic);
+    }).catch(() => {
+      setIsUserClinic(false);
+    });
+  }, []);
+
+  if (!user) return null;
+
+  // Ambil daftar menu sesuai role yang sedang login.
+  const links = navConfig[user.role] ?? [];
+  const copy = roleCopy[user.role];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-mist via-white to-slate-100">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 md:flex-row md:py-10">
+        <aside className="w-full rounded-3xl bg-white/80 p-6 shadow-[0_10px_30px_rgba(5,46,31,0.08)] backdrop-blur md:w-72">
+          <div className="rounded-2xl bg-gradient-to-br from-primary to-emerald-600 p-5 text-white shadow-lg">
+            <p className="text-xs uppercase tracking-[0.4em] text-white/70">Pet Identity</p>
+            <p className="mt-2 text-2xl font-semibold">{copy.portalName}</p>
+            <p className="mt-3 text-sm text-white/80">{copy.summary}</p>
+          </div>
+          <nav className="mt-6 space-y-3">
+            {links.map((link) => {
+              // Tandai menu aktif sesuai path saat ini.
+              const active = location.pathname === link.to;
+              return (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  className={`group block rounded-2xl border px-4 py-3 text-sm transition ${
+                    active
+                      ? 'border-transparent bg-mist text-primary shadow-sm'
+                      : 'border-slate-200 text-slate-600 hover:border-primary/40 hover:bg-white'
+                  }`}
+                >
+                  <p className="font-semibold">{link.label}</p>
+                  {link.description && (
+                    <p className="text-xs text-slate-400 group-hover:text-slate-500">{link.description}</p>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="mt-8 rounded-2xl border border-dashed border-primary/30 p-4 text-sm text-slate-500">
+            <p className="font-semibold text-secondary">Butuh bantuan?</p>
+            <p>Konsultasikan prosedur standar klinik dengan tim support kami.</p>
+          </div>
+        </aside>
+        <div className="flex-1">
+          <header className="flex flex-col gap-4 rounded-3xl bg-white/80 p-6 shadow-sm backdrop-blur md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-widest text-slate-400">Masuk sebagai</p>
+              <p className="text-2xl font-semibold text-secondary">{user.name}</p>
+              {/* <p className="text-sm capitalize text-slate-500">{user.role.toLowerCase() + " - " + (isUserClinic ? "verified" : "not verified")}</p> */}
+            </div>
+            <button
+              onClick={logout}
+              className="inline-flex items-center justify-center rounded-full bg-secondary px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-secondary/30 transition hover:bg-primary"
+            >
+              Keluar
+            </button>
+          </header>
+          <main className="mt-6 rounded-3xl bg-white/90 p-5 shadow-[0_15px_35px_rgba(15,118,110,0.08)] backdrop-blur">
+            <Outlet />
+          </main>
+        </div>
+      </div>
+    </div>
+  );
+};

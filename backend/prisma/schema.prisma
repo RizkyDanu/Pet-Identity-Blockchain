@@ -1,0 +1,180 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id              Int                 @id @default(autoincrement())
+  name            String
+  email           String              @unique
+  passwordHash    String              @map("password_hash")
+  role            UserRole            @default(OWNER)
+  walletAddress   String?             @unique(where: raw("(wallet_address IS NOT NULL)")) @map("wallet_address")
+  corrections     CorrectionRequest[] @relation("OwnerCorrections")
+  reviews         CorrectionRequest[] @relation("ReviewerCorrections")
+  clinicRecords   MedicalRecord[]     @relation("ClinicRecords")
+  verifiedRecords MedicalRecord[]     @relation("VerifierRecords")
+  notifications   Notification[]
+  ownedFrom       OwnershipHistory[]  @relation("FromOwner")
+  ownedTo         OwnershipHistory[]  @relation("ToOwner")
+  pets            Pet[]               @relation("PetOwner")
+
+  @@map("users")
+}
+
+model Pet {
+  id               Int                 @id @default(autoincrement())
+  publicId         String              @unique @map("public_id")
+  name             String
+  species          String
+  breed            String
+  birthDate        DateTime            @map("birth_date")
+  age              Int?
+  color            String
+  physicalMark     String              @map("physical_mark")
+  status           PetStatus           @default(REGISTERED)
+  ownerId          Int                 @map("owner_id")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @default(now()) @updatedAt @map("updated_at")
+  onChainPetId     Int?                @map("on_chain_pet_id")
+  dataHash         String?             @map("data_hash")
+  txHash           String?             @map("tx_hash")
+  blockNumber      Int?                @map("block_number")
+  blockTimestamp   DateTime?           @map("block_timestamp") @db.Timestamp(6)
+  corrections      CorrectionRequest[]
+  medicalRecords   MedicalRecord[]
+  ownershipHistory OwnershipHistory[]
+  owner            User                @relation("PetOwner", fields: [ownerId], references: [id])
+
+  @@map("pets")
+}
+
+model MedicalRecord {
+  id              Int                 @id @default(autoincrement())
+  petId           Int                 @map("pet_id")
+  clinicId        Int                 @map("clinic_id")
+  vaccineType     String              @map("vaccine_type")
+  batchNumber     String              @map("batch_number")
+  givenAt         DateTime            @map("given_at")
+  notes           String?
+  evidenceUrl     String?             @map("evidence_url")
+  status          MedicalRecordStatus @default(PENDING)
+  verifiedById    Int?                @map("verified_by")
+  verifiedAt      DateTime?           @map("verified_at")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  onChainRecordId Int?                @map("on_chain_record_id")
+  dataHash        String?             @map("data_hash")
+  txHash          String?             @map("tx_hash")
+  blockNumber     Int?                @map("block_number")
+  blockTimestamp  DateTime?           @map("block_timestamp") @db.Timestamp(6)
+  clinic          User                @relation("ClinicRecords", fields: [clinicId], references: [id])
+  pet             Pet                 @relation(fields: [petId], references: [id])
+  verifiedBy      User?               @relation("VerifierRecords", fields: [verifiedById], references: [id])
+
+  @@map("medical_records")
+}
+
+model OwnershipHistory {
+  id             Int       @id @default(autoincrement())
+  petId          Int       @map("pet_id")
+  fromOwnerId    Int       @map("from_owner_id")
+  toOwnerId      Int       @map("to_owner_id")
+  transferredAt  DateTime? @map("transferred_at")
+  onChainPetId   Int?      @map("on_chain_pet_id")
+  txHash         String?   @map("tx_hash")
+  blockNumber    Int?      @map("block_number")
+  blockTimestamp DateTime? @map("block_timestamp") @db.Timestamp(6)
+  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
+  fromOwner      User      @relation("FromOwner", fields: [fromOwnerId], references: [id])
+  pet            Pet       @relation(fields: [petId], references: [id])
+  toOwner        User      @relation("ToOwner", fields: [toOwnerId], references: [id])
+
+  @@map("ownership_history")
+}
+
+model WalletChallenge {
+  walletAddress String   @id @map("wallet_address")
+  message       String
+  expiresAt     DateTime @map("expires_at") @db.Timestamp(6)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([expiresAt])
+  @@map("wallet_challenges")
+}
+
+model VaccineReminderLog {
+  id          Int      @id @default(autoincrement())
+  petId       Int      @map("pet_id")
+  ownerId     Int      @map("owner_id")
+  vaccineType String   @default("unknown") @map("vaccine_type")
+  dueDate     DateTime @map("due_date") @db.Date
+  sentAt      DateTime @default(now()) @map("sent_at") @db.Timestamp(6)
+
+  @@unique([petId, vaccineType, dueDate])
+  @@map("vaccine_reminder_logs")
+}
+
+model CorrectionRequest {
+  id             Int              @id @default(autoincrement())
+  petId          Int              @map("pet_id")
+  ownerId        Int              @map("owner_id")
+  fieldName      String           @map("field_name")
+  oldValue       String           @map("old_value")
+  newValue       String           @map("new_value")
+  status         CorrectionStatus @default(PENDING)
+  reviewedById   Int?             @map("reviewed_by")
+  reviewedAt     DateTime?        @map("reviewed_at")
+  reason         String?
+  createdAt      DateTime         @default(now()) @map("created_at")
+  dataHash       String?          @map("data_hash")
+  txHash         String?          @map("tx_hash")
+  blockNumber    Int?             @map("block_number")
+  blockTimestamp DateTime?        @map("block_timestamp") @db.Timestamp(6)
+  owner          User             @relation("OwnerCorrections", fields: [ownerId], references: [id])
+  pet            Pet              @relation(fields: [petId], references: [id])
+  reviewedBy     User?            @relation("ReviewerCorrections", fields: [reviewedById], references: [id])
+
+  @@map("correction_requests")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  title     String
+  message   String
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+enum UserRole {
+  OWNER
+  CLINIC
+  ADMIN
+  PUBLIC_VERIFIER
+}
+
+enum PetStatus {
+  REGISTERED
+  TRANSFER_PENDING
+  INACTIVE
+}
+
+enum MedicalRecordStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum CorrectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
